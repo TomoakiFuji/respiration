@@ -43,8 +43,10 @@ respiration_Start_draw = 0
 # 微分波形の描画（する：1, しない：0）drawGraphが0のときは描画しない
 drawDiff = 1
 
-# データ書き出し（する：1, しない：0）detectPointが0のときはこの値にかかわらずデータは書き出さない
-writeData = 1
+# 検出結果書き出し（する：1, しない：0）detectPointが0のときはこの値にかかわらずデータは書き出さない
+writeData = 0
+# 検出のために、スムージングした時系列データ書きだし（する：1, しない：0）
+writeTSdata = 0
 
 # graphフォルダへグラフ書き出し（する：1, しない：0） 注）drawGraph=0のときは無視
 writeGraph = 0
@@ -67,7 +69,8 @@ if detectPoint != 1:
     peak_position_draw = 0
 
 filename, ext = os.path.splitext(input_file)
-output_file = filename + '.csv'
+output_file_detectedData = filename + '_detectedData.csv'
+output_file_TSdata = filename + '_TSdata.csv'
 
 samplingPeriod = 1.0 / samplingFreq
 del samplingFreq
@@ -420,7 +423,7 @@ for section in range(sectionNum):
         else:
             plt.show()
 
-if writeData:
+if detectPoint:
     respiration_Start_tmp = []
     for section in respiration_Start:
         for n in section:
@@ -442,7 +445,8 @@ if writeData:
     peak = peak_tmp
     del peak_tmp
 
-    f = open(output_file, 'w')
+if writeData:
+    f = open(output_file_detectedData, 'w')
 
     f.write('通番,'
             ' 吸気開始時点の時間[s], そのときの値,'
@@ -473,3 +477,41 @@ if writeData:
                 + '\n')
 
     f.close()
+    del f
+
+if writeTSdata:
+    f = open(output_file_TSdata, 'w')
+
+    f.write('時間[s], そのときの値,'
+            ' 吸気開始時点の時間[s], そのときの値,'
+            ' 吸気終了時点の時間[s], そのときの値,'
+            ' 50%呼出時点の時間[s], そのときの値\n')
+
+    for i in range(len(RPS)):
+        if detectPoint & (i < len(respiration_Start)-1) & detectPoint:
+            f.write('%7.2f' % time[i] + ', ' + '%7.2f' % RPS[i]
+                    + ', '
+                    + '%7.2f' % time[respiration_Start[i]]
+                    + ', '
+                    + '%7.2f' % RPS[respiration_Start[i]]
+                    + ', '
+                    + '%7.2f' % time[peak[i]]
+                    + ', '
+                    + '%7.2f' % RPS[peak[i]]
+                    + ', '
+                    + '%7.2f' % time[respiration_Mid[i]]
+                    + ', '
+                    + '%7.2f' % RPS[respiration_Mid[i]]
+                    + '\n')
+        elif detectPoint & (i < len(respiration_Start)) & detectPoint:
+            f.write('%7.2f' % time[i] + ', ' + '%7.2f' % RPS[i]
+                    + ', '
+                    + '%7.2f' % time[respiration_Start[i]]
+                    + ', '
+                    + '%7.2f' % RPS[respiration_Start[i]]
+                    + '\n')
+        else:
+            f.write(  '%7.2f' % time[i] + ', ' + '%7.2f' % RPS[i] + '\n')
+
+    f.close()
+    del f
