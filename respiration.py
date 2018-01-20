@@ -2,13 +2,15 @@
 '''
 respiration.py
 
-auther  : Tomoaki Fuji
-history  : rev---+date----------+comment---------------------------------------------
-           1.00  2017/12/13     初版作成
-           1.01  2017/12/15     グラフへの描画オプションを追加
-           1.02  2017/12/22     波形を0-1に正規化しないようにした
-           1.03  2017/12/25     吸気開始点などの検出に用いたスムージング後の時系列データを
+auther  :   Tomoaki Fuji
+history :   rev---+date---------+comment---------------------------------------------------
+            1.00  2017/12/13    初版作成
+            1.01  2017/12/15    グラフへの描画オプションを追加
+            1.02  2017/12/22    波形を0-1に正規化しないようにした
+            1.03  2017/12/25    吸気開始点などの検出に用いたスムージング後の時系列データを
                                 ファイル出力できるようにした
+            1.04  2018/01/20    nanにセットされたデータの書き出しエラーを修正した。また、
+                                分析データが短いときにエラーが出る不具合を修正した。
 '''
 
 import sys
@@ -45,7 +47,7 @@ drawDiff = 1
 
 # 検出結果書き出し（する：1, しない：0）detectPointが0のときはこの値にかかわらずデータは書き出さない
 writeData = 0
-# 検出のために、スムージングした時系列データ書きだし（する：1, しない：0）
+# 検出のためにスムージングした時系列データ書きだし（する：1, しない：0）
 writeTSdata = 0
 
 # graphフォルダへグラフ書き出し（する：1, しない：0） 注）drawGraph=0のときは無視
@@ -181,7 +183,7 @@ if detectPoint != 0:
     serialNum = 1
 
 for section in range(sectionNum):
-    if section < sectionNum - 3:  # 最後の区間以外
+    if section < sectionNum - 3:  # 最後の区間以外は60sないので
         # 60s間ごとに計算（30sずつ重複）
         RPS_section = RPS[int(30.0 / samplingPeriod) * section:int(30.0 / samplingPeriod) * (section + 2)]
         dRPS_section = dRPS[int(30.0 / samplingPeriod) * section:int(30.0 / samplingPeriod) * (section + 2)]
@@ -193,11 +195,14 @@ for section in range(sectionNum):
 
     # しきい値A,Bの計算
     # 標準偏差
-    if section != sectionNum - 2:
-        SD_dRPS = np.std(dRPS_section)
-        thresholdA = SD_dRPS * 0.8
-        thresholdB = SD_dRPS * 0.5
-        del SD_dRPS
+    if section < sectionNum - 2:
+        dRPS_section_tmp = dRPS_section
+    else:
+        dRPS_section_tmp = dRPS[int(30.0 / samplingPeriod) * (sectionNum-2):np.size(dRPS)]
+    SD_dRPS = np.std(dRPS_section_tmp)
+    thresholdA = SD_dRPS * 0.8
+    thresholdB = SD_dRPS * 0.5
+    del SD_dRPS
 
     if detectPoint != 0:
         ps.append([])
@@ -406,7 +411,9 @@ for section in range(sectionNum):
                     plt.axvline(x=time[respiration_Start[section][area]], lw=1.2, color='gray')
 
         # ax1.set_ylim(-0.05, 1.05)
-        ax1.set_ylim(min(RPS)-3, max(RPS)+3)
+        tmp = (max(RPS) - min(RPS)) * 0.05
+        ax1.set_ylim(min(RPS)-tmp, max(RPS)+tmp)
+        del tmp
         ax1.set_xlim([section * 30, (section + 2) * 30])
         ax1.set_xticks([section * 30, section * 30 + 5, section * 30 + 10, section * 30 + 15, section * 30 + 20,
                         section * 30 + 25, section * 30 + 30, section * 30 + 35, section * 30 + 40, section * 30 + 45,
@@ -489,26 +496,56 @@ if writeTSdata:
 
     for i in range(len(RPS)):
         if detectPoint & (i < len(respiration_Start)-1) & detectPoint:
+
+            if np.isnan(respiration_Start[i]):
+                col1 = np.nan
+                col2 = np.nan
+            else:
+                col1 = time[respiration_Start[i]]
+                col2 = RPS[respiration_Start[i]]
+
+            if np.isnan(peak[i]):
+                col3 = np.nan
+                col4 = np.nan
+            else:
+                col3 = time[peak[i]]
+                col4 = RPS[peak[i]]
+
+            if np.isnan(respiration_Mid[i]):
+                col5 = np.nan
+                col6 = np.nan
+            else:
+                col5 = time[respiration_Mid[i]]
+                col6 = RPS[respiration_Mid[i]]
+
             f.write('%7.2f' % time[i] + ', ' + '%7.2f' % RPS[i]
                     + ', '
-                    + '%7.2f' % time[respiration_Start[i]]
+                    + '%7.2f' % col1
                     + ', '
-                    + '%7.2f' % RPS[respiration_Start[i]]
+                    + '%7.2f' % col2
                     + ', '
-                    + '%7.2f' % time[peak[i]]
+                    + '%7.2f' % col3
                     + ', '
-                    + '%7.2f' % RPS[peak[i]]
+                    + '%7.2f' % col4
                     + ', '
-                    + '%7.2f' % time[respiration_Mid[i]]
+                    + '%7.2f' % col5
                     + ', '
-                    + '%7.2f' % RPS[respiration_Mid[i]]
+                    + '%7.2f' % col6
                     + '\n')
         elif detectPoint & (i < len(respiration_Start)) & detectPoint:
+
+            if np.isnan(respiration_Start[i]):
+                col1 = np.nan
+                col2 = np.nan
+            else:
+                col1 = time[respiration_Start[i]]
+                col2 = RPS[respiration_Start[i]]
+
             f.write('%7.2f' % time[i] + ', ' + '%7.2f' % RPS[i]
                     + ', '
-                    + '%7.2f' % time[respiration_Start[i]]
+                    + '%7.2f' % col1
                     + ', '
-                    + '%7.2f' % RPS[respiration_Start[i]]
+                    + '%7.2f' % col2
                     + '\n')
         else:
             f.write(  '%7.2f' % time[i] + ', ' + '%7.2f' % RPS[i] + '\n')
